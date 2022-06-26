@@ -1,0 +1,197 @@
+---
+title: "Animated map of agricultural subsidies by US county (2010-2019)"
+author: Haley Fox
+date: June 26, 2022
+toc: true
+toc-depth: 3
+number-sections: true
+number-depth: 3
+highlight-style: pygments
+format: html
+editor: visual
+---
+
+## About the data
+
+Data used in this script are the total amount of agricultural subsidies each US county received from 2010 - 2019. Data and code are available on [github](https://github.com/haleyepperlyfox/ag-subsidies-gganimate). These data were scraped from this [website](https://farm.ewg.org/) managed by the Environmental Working Group (see [tutorial](https://rpubs.com/haleyepperlyfox/916671) for scraping these data). To make these data comparable across years, I have adjusted all dollar amounts for regional inflation so they are all represented in 2019 dollars.
+
+Each US county is identified using a unique 5-digit identifier called a FIPS code. The first 2 digits of the FIPS code refer to the state identifier, while the last 3 digits refer to the county identifier. For example, California's state FIPS code is 06 and Santa Barbara County's FIPS code is 083, therefore Santa Barbara County's FULL FIPS code is 06083.
+
+## Objective
+
+The objective of this script was to use `gganimate` to create an animated map of total agricultural subsidies each US county received from 2010 - 2019.
+
+## Coding time!
+
+### Load libraries and read in data
+
+Load in the libraries that we'll need, most notably `gganimate`, which will add animation to our plots by transitioning between different plots (e.g., years of data).
+
+```{r}
+#| label: load-packages
+#| output: false
+if (!require(librarian)) {
+  install.packages("librarian")
+  library(librarian)
+}
+librarian::shelf(here, #creates paths relative to the top-level directory
+                 readr, #reads csv
+                 ggplot2, #for plotting data
+                 usmap, #maps US data using FIPS code
+                 transformr, #required to tween polygons
+                 magrittr, #pipe function
+                 dplyr, #data manipulation 
+                 gganimate) #add animation to maps
+```
+
+Read in data from the github [repository](https://github.com/haleyepperlyfox/ag-subsidies-gganimate).
+
+```{r}
+#| label: read-data
+#| output: false
+subsidies <- read_csv(here("2010-19-us-county-total-subsidies-adj-inflation.csv"))
+```
+
+```{r}
+#| label: view-data
+head(subsidies)
+```
+
+### Non-animated plot
+
+First let's just plot the data for one year (2019) using the `plot_usmap` function in the `usmap` package. This package merges the FIPS code in our data with the map data FIPS code for easy mapping. All you need in your dataset is a column with the FIPS code and a column with values and the `plot_usmap` function will give you a beautiful map!
+
+```{r}
+#| label: plot-data
+plot_usmap(data = subsidies[subsidies$year==2019,], values = "total_subs_adj", size = .1)  + 
+    labs(title = "Total agricultural subsidies received in 2019") +
+  scale_fill_gradient2(name = "Total subsidies", label = scales::comma)  +
+  theme(legend.position = "right", plot.title = element_text(size=14), legend.title = element_text(size=12))
+```
+
+### Add missing FIPS codes
+
+We can see in the previous plot that there are some counties for which we don't have agricultural subsidies data. These counties are represented in dark gray.
+
+In order to turn this map into an animated map with `gganimate` and `usmap`, we have to make sure that every possible FIPS code is included in our subsidies data. If there are counties missing from our data, we will get an error code and the animated map will fail.
+
+To avoid this error, in our animation code we could use `transition_states` instead of `transition_time` (more information about these functions in @sec-animate). Then those counties and their boundaries would not show up on the map at all, and we could overlay an empty map of US county boundaries to fill out the map. For this example, we're going to add in the missing FIPS codes though.
+
+We can find out which FIPS codes we are missing by first joining our data with the county map data stored in the `usmap` package using the `map_with_data` function.
+
+```{r}
+#| label: join-w-county-map-data
+data_check <- map_with_data(subsidies, values = "total_subs_adj")
+data_check$fips <- as.numeric(data_check$fips)
+```
+
+Then we can find out which FIPS codes are included in the joined dataframe that weren't included in our original subsidies dataframe. There are 69 counties which are missing data in our subsidies dataframe.
+
+```{r}
+#| label: find-missing-fips
+missing_fips <- setdiff(unique(data_check$fips), unique(subsidies$fips))
+missing_fips
+```
+
+Next we can loop through all of the missing FIPS codes and create a dataframe with each missing FIPS code in each year (2010 - 2019) with their subsidy amount set to 0.
+
+```{r}
+#| label: missing-fips-df
+subsidies_data_missing_all <- data.frame()
+for(fip in missing_fips){ 
+  subsidies_data_missing_1 <- data.frame(year = sort(unique(subsidies$year)),
+                           total_subs_adj = 0,
+                           fips = fip)
+subsidies_data_missing_all <- rbind(subsidies_data_missing_1, subsidies_data_missing_all)
+}
+head(subsidies_data_missing_all)
+```
+
+Lastly, we can bind the missing FIPS dataframe with our original subsidies dataframe. Now all FIPS codes are included and we can create an animated map.
+
+```{r}
+#| label: join-missing-fips-w-original
+subsidies_df <- rbind(subsidies, subsidies_data_missing_all)
+```
+
+### Investigate outliers
+
+For mapping purposes, it can be hard to see variation in the data when there are outliers making the range huge. For example, if most of the data are between 0 - 100, but there is one data point at 1,000, then the color scale on a plot will make the data points from 0 - 100 all a very light blue while the data point at 1,000 will be the only dark blue. In some instances we might only be interested in these extreme values, but often times we want to see the variation in the majority of the data.
+
+One method to deal with these "outliers" is to set all data over a certain value to a maximum value, and then indicate with a + sign in the legend that the maximum represents data that is the maximum value or higher. This might sound confusing at first, but hopefully it will make sense when we go through the subsidies data as an example.
+
+First let's see what our potential "outliers" might be.
+
+```{r}
+#| label: outliers-summary
+summary(subsidies_df$total_subs_adj)
+```
+
+The maximum value at \~94 million is considerably higher than the third quartile at \~8 million.
+
+We can also visualize the data's spread with a histogram.
+
+```{r}
+#| label: histogram
+hist(subsidies_df$total_subs_adj, main = "Histogram of total subsidies",
+     xlab = "Total subsidies ($)")
+```
+
+Based on the histogram, it doesn't look like there are many data points above \~40 or \~50 million. Let's count the number of points above \~40 and \~50 million and calculate what percent of the data they cover.
+
+```{r}
+#| label: number-outliers-over-40
+length(which(subsidies_df$total_subs_adj>40000000)) 
+(length(which(subsidies_df$total_subs_adj>40000000)) / length(subsidies_df$total_subs_adj)) * 100
+```
+
+```{r}
+#| label: number-outliers-over-50
+length(which(subsidies_df$total_subs_adj>50000000)) 
+(length(which(subsidies_df$total_subs_adj>50000000)) / length(subsidies_df$total_subs_adj)) * 100
+```
+
+Let's make the cutoff at 50 million because only 0.28% of the data (87 points) are above 50 million.
+
+There are also some negative values in the data, which I assume means that the county owed money back to the government. I'm not sure why this would happen, but it has something to do with the disaster commodity payments. Let's see how often there were negative values and then decide on how to deal with them.
+
+```{r}
+#| label: negative-outliers
+length(which(subsidies_df$total_subs_adj<0))
+(length(which(subsidies_df$total_subs_adj<0)) / length(subsidies_df$total_subs_adj)) * 100
+```
+
+There are only 25 data points (0.08% of the data) where the value is negative. Given how few values are negative and that it will potentially distort our legend, let's set the lower cutoff to 0.
+
+So now that we've decided our upper cutoff will be 50 million and our lower cutoff will be 0, we need to create a new subsidies column where all values over 50 million equal 50 million and all values less than 0 equal 0.
+
+```{r}
+#| label: remove-outliers
+subsidies_df_wo_outliers <- subsidies_df %>% 
+  mutate(total_subs_adj_cut_off = if_else(total_subs_adj > 50000000, 50000000, total_subs_adj)) %>% 
+  mutate(total_subs_adj_cut_off = if_else(total_subs_adj < 0, 0, total_subs_adj_cut_off)) 
+```
+
+### Animate the map {#sec-animate}
+
+Now for the fun part! Rather than making a static map of just one year, we can animate the data with the `gganimate` package. First we create a typical map with the `plot_usmap` function, but this time we don't define which year of data we want to plot since we want to plot them all. We set the breakpoints for the data so that we can label the legend with "0-" to denote those outliers that were less than 0 that we converted to 0, and same with "50,000,000+".
+
+To add in the animation part, we add `transition_time(year)` to the plot. `transition_time` splits the data into multiple times and tweens between the defined times, pausing at each time. `transition_time` is a variant of `transition_states` that is intended for data where the states are representing specific point in time. The transition length between the states will be set to correspond to the actual time difference between the states. We set `ease_aes` to `linear` to define that one value should change to another value linearly, rather than starting slowly and building momentum.
+
+We can also set the title of the plot to vary by the year of data which are currently showing by including `{as.integer(frame_time)}` in the plot title. You have to set the time variable as an integer otherwise it will include transition times between the years (e.g., 2010.25).
+
+The `animate` function takes a `gganim` object and renders it into an animation in gif form. This process can take a little while. You can use `anim_save` to save the animation.
+
+```{r}
+#| label: plot-animated
+plot <- plot_usmap(data = subsidies_df_wo_outliers, values = "total_subs_adj_cut_off", size = .1)  + 
+    scale_fill_gradient2(breaks = c(0, 10000000, 20000000, 30000000, 40000000, 50000000), 
+                         labels = c("0-", "10,000,000", "20,000,000", "30,000,000", "40,000,000", "50,000,000+"), name = "Subsidies (in 2019 $)")  + 
+  theme(legend.position = "right", plot.title = element_text(size=14), legend.title = element_text(size=12)) +
+    transition_time(year) +
+  labs(title = 'Total agricultural subsidies received in {as.integer(frame_time)}') +
+  ease_aes('linear')
+animate(plot, height = 5, width = 8.5, units = "in", res = 150, end_pause = 10)
+```
+
+Now you have a lovely animated map!
