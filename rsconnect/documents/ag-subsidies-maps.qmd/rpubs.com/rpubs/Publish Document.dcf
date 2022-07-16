@@ -1,0 +1,11 @@
+name: Publish Document
+title:
+username:
+account: rpubs
+server: rpubs.com
+hostUrl: rpubs.com
+appId: https://api.rpubs.com/api/v1/document/919270/f0fbf406e68441f88e94429f962a3d4a
+bundleId: https://api.rpubs.com/api/v1/document/919270/f0fbf406e68441f88e94429f962a3d4a
+url: http://rpubs.com/haleyepperlyfox/919270
+when: 1657930000.85585
+lastSyncTime: 1657930000.85587

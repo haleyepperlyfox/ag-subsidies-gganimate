@@ -13,7 +13,7 @@ editor: visual
 
 ## About the data
 
-Data used in this script are the total amount of agricultural subsidies each US county received from 2010 - 2019. Data and code are available on [github](https://github.com/haleyepperlyfox/ag-subsidies-gganimate). These data were scraped from this [website](https://farm.ewg.org/) managed by the Environmental Working Group (see [tutorial](https://rpubs.com/haleyepperlyfox/916671) for scraping these data). To make these data comparable across years, I have adjusted all dollar amounts for regional inflation so they are all represented in 2019 dollars.
+Data used in this script are the total amount of agricultural subsidies each US county received from 2010 - 2019. Data and code are available on [github](https://github.com/haleyepperlyfox/ag-subsidies-gganimate){target="_blank"}. These data were scraped from this [website](https://farm.ewg.org/){target="_blank"} managed by the Environmental Working Group (see [tutorial](https://rpubs.com/haleyepperlyfox/916671){target="_blank"} for scraping these data). To make these data comparable across years, I have adjusted all dollar amounts for regional inflation so they are all represented in 2019 dollars.
 
 Each US county is identified using a unique 5-digit identifier called a FIPS code. The first 2 digits of the FIPS code refer to the state identifier, while the last 3 digits refer to the county identifier. For example, California's state FIPS code is 06 and Santa Barbara County's FIPS code is 083, therefore Santa Barbara County's FULL FIPS code is 06083.
 
@@ -44,7 +44,7 @@ librarian::shelf(here, #creates paths relative to the top-level directory
                  gganimate) #add animation to maps
 ```
 
-Read in data from the github [repository](https://github.com/haleyepperlyfox/ag-subsidies-gganimate).
+Read in data from the github [repository](https://github.com/haleyepperlyfox/ag-subsidies-gganimate){target="_blank"}.
 
 ```{r}
 #| label: read-data
